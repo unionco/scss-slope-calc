@@ -1,0 +1,209 @@
+////////////////////////////
+//    Slope Calc Mixin    //
+////////////////////////////
+//
+// Usage:
+//
+// .my-widget {
+//   @include slope-calc(padding, 20px 320px, 60px 1440px);
+// }
+//
+// Outputs:
+//
+// .my-widget {
+//   padding: calc(3.57143vw + .53571rem);
+// }
+//
+// @media only screen and (min-width: 90em)
+//   .my-widget {
+//     padding: 3.75rem;
+//   }
+// }
+//
+//
+// Optional:
+//
+// Pass in ($clip: false) to avoid adding a media query to the bottom of the page.
+// This is useful when applying multiple slope calcs to the same property at your own specified breakpoints.
+//
+//
+// NOTE:
+//
+// Add `@include slope-calc-clip-media-queries()` to the very end of your stylesheet.
+//
+//
+
+@function strip-unit($number) {
+    @if type-of($number) == 'number' and not unitless($number) {
+        @return $number / ($number * 0 + 1);
+    }
+    @return $number;
+}
+
+//
+// Find the square root of a number
+//
+// For example:
+// sqrt(4): 2;
+// sqrt(16): 4;
+//
+@function sqrt($r) {
+    $x0: 1;
+    $x1: $x0;
+
+    @for $i from 1 through 10 {
+        $x1: $x0 - ($x0 * $x0 - abs($r)) / (2 * $x0);
+        $x0: $x1;
+    }
+
+    @return $x1;
+}
+
+@function px-to-em($number, $base:16) {
+    @return (strip-unit($number)/$base) * 1em;
+}
+
+@function unitless-px($number, $base:16) {
+    @if(unitless($number)) {
+        @return $number;
+    }
+    @else {
+        $unit: unit($number);
+        $number: strip-unit($number);
+
+        @if ($unit == 'px') {
+            @return $number;
+        }
+        @return $number*$base;
+    }
+}
+
+@function rem($number, $base:16) {
+    @return unitless-px($number)/$base * 1rem;
+}
+
+$slope-calc-data: () !default;
+
+@function slope-calc-internal($desktop, $mobile: false) {
+    $desktop-font: $desktop;
+    $desktop-bp: 1440px;
+
+    @if type-of($desktop) == 'list' {
+        $desktop-font: nth($desktop, 1);
+        $desktop-bp: nth($desktop, 2);
+    }
+
+    $desktop-font: unitless-px($desktop-font);
+    $desktop-bp: unitless-px($desktop-bp) / 100;
+
+    $mobile-font: ( sqrt($desktop-font - 10) * 2 ) + 10;
+    $mobile-bp: 320px;
+
+    @if type-of($mobile) == 'list' {
+        $mobile-font: nth($mobile, 1);
+        $mobile-bp: nth($mobile, 2);
+    }
+    @else if $mobile {
+        $mobile-font: $mobile;
+    }
+
+    $mobile-font: unitless-px($mobile-font);
+    $mobile-bp: unitless-px($mobile-bp) / 100;
+
+    @if($mobile-bp > $desktop-bp) {
+        $tmp: $desktop-bp;
+        $desktop-bp: $mobile-bp;
+        $mobile-bp: $tmp;
+
+        $tmp: $desktop-font;
+        $desktop-font: $mobile-font;
+        $mobile-font: $tmp;
+    }
+
+    $slope: ($desktop-font - $mobile-font) / ($desktop-bp - $mobile-bp);
+    $y-intercept: $mobile-font - ($mobile-bp * $slope);
+
+    $calc: calc(#{$slope*1vw} + #{($y-intercept/16)*1rem});
+    $clip: rem($desktop-font);
+
+    @if $desktop-font == $mobile-font {
+        $calc: rem($desktop-font);
+        $clip: false;
+    }
+
+    @return (
+        pieces: #{$slope*1vw} #{($y-intercept/16)*1rem},
+        calc: $calc,
+        breakpoint: px-to-em($desktop-bp*100px),
+        clip: $clip
+    );
+}
+
+@function slope-calc($desktop, $mobile: false) {
+    @return map-get(slope-calc-internal($desktop, $mobile), calc);
+}
+
+@function slope-calc-transform($prop, $desktop, $mobile: false) {
+    $pieces: map-get(slope-calc-internal($desktop, $mobile), pieces);
+    @return #{$prop + '(' + nth($pieces, 1) + ')'} #{$prop + '(' + nth($pieces, 2) + ')'};
+}
+
+@mixin slope-calc($prop, $desktop, $mobile: false, $clip: true, $important: false) {
+
+    @if type-of($prop) == 'list' {
+        @each $p in $prop {
+            @include slope-calc($p, $desktop, $mobile, $clip, $important);
+        }
+    }
+    @else {
+
+        $results: slope-calc-internal($desktop, $mobile);
+
+        // uncomment the following for an IE8 fallback value
+        //$desktop-font: nth($desktop, 1);
+        //$desktop-font: unitless-px($desktop-font);
+        //#{$prop}: $desktop-font*1px;
+        // end IE8 fallback
+
+        #{$prop}: map-get($results, calc) if($important, !important, null);
+
+        @if $clip and map-get($results, clip) {
+            $desktop-value: map-get($results, clip) if($important, !important, null);
+            $desktop-bp: map-get($results, breakpoint);
+
+            $selectors: ();
+            @if map-has-key($slope-calc-data, $desktop-bp) {
+                $selectors: map-get($slope-calc-data, $desktop-bp);
+            }
+
+            $selector: #{&};
+            $props: ();
+            @if map-has-key($selectors, $selector) {
+                $props: map-get($selectors, $selector);
+            }
+
+            $props: map-merge($props, ($prop: $desktop-value));
+            $selectors: map-merge($selectors, ($selector: $props));
+            $slope-calc-data: map-merge($slope-calc-data, ($desktop-bp: $selectors)) !global;
+        }
+    }
+}
+
+@mixin font-size($desktop, $mobile: false, $clip: true, $important: false) {
+    @include slope-calc(font-size, $desktop, $mobile, $clip: true, $important: $important);
+}
+
+// add `@include slope-calc-clip-media-queries()` to the bottom of your stylesheet.
+@mixin slope-calc-clip-media-queries() {
+    @each $breakpoint, $selectors in $slope-calc-data {
+        @media only screen and (min-width: #{$breakpoint}) {
+            @each $selector, $props in $selectors {
+                #{$selector} {
+                    @each $prop, $value in $props {
+                        #{$prop}: $value;
+                    }
+                }
+            }
+        }
+    }
+}
