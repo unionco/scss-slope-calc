@@ -5,7 +5,7 @@
 // Usage:
 //
 // .my-widget {
-//   @include slope-calc(padding, 20px 320px, 60px 1440px);
+//   @include slope-calc(padding, 20px 320px, 60px 1440px, 60px 1441px);
 // }
 //
 // Outputs:
@@ -21,42 +21,35 @@
 // }
 //
 //
-// Optional:
+// Flags:
 //
-// Pass in ($clip: false) to avoid adding a media query to the bottom of the page.
-// This is useful when applying multiple slope calcs to the same property at your own specified breakpoints.
-//
-//
-// NOTE:
-//
-// Add `@include slope-calc-clip-media-queries()` to the very end of your stylesheet.
+// Flags are an optional argument passed in at the end of the slope-calc include. Currently, the only flag is
+// "important" if you pass in "important" (with or without quotes) as the last argument of slope-calc, it will
+// apply the css "!important" flag to the property.
 //
 //
+
+@function remove($list, $value, $recursive: false) {
+    $result: ();
+
+    @for $i from 1 through length($list) {
+        @if type-of(nth($list, $i)) == list and $recursive {
+            $result: append($result, remove(nth($list, $i), $value, $recursive));
+        }
+
+        @else if nth($list, $i) != $value {
+            $result: append($result, nth($list, $i));
+        }
+    }
+
+    @return $result;
+}
 
 @function strip-unit($number) {
     @if type-of($number) == 'number' and not unitless($number) {
         @return $number / ($number * 0 + 1);
     }
     @return $number;
-}
-
-//
-// Find the square root of a number
-//
-// For example:
-// sqrt(4): 2;
-// sqrt(16): 4;
-//
-@function sqrt($r) {
-    $x0: 1;
-    $x1: $x0;
-
-    @for $i from 1 through 10 {
-        $x1: $x0 - ($x0 * $x0 - abs($r)) / (2 * $x0);
-        $x0: $x1;
-    }
-
-    @return $x1;
 }
 
 @function px-to-em($number, $base:16) {
@@ -84,28 +77,15 @@
 
 $slope-calc-data: () !default;
 
-@function slope-calc-internal($desktop, $mobile: false) {
-    $desktop-font: $desktop;
-    $desktop-bp: 1440px;
-
-    @if type-of($desktop) == 'list' {
-        $desktop-font: nth($desktop, 1);
-        $desktop-bp: nth($desktop, 2);
-    }
+@function slope-calc-internal($mobile, $desktop) {
+    $desktop-font: nth($desktop, 1);
+    $desktop-bp: nth($desktop, 2);
 
     $desktop-font: unitless-px($desktop-font);
     $desktop-bp: unitless-px($desktop-bp) / 100;
 
-    $mobile-font: ( sqrt($desktop-font - 10) * 2 ) + 10;
-    $mobile-bp: 320px;
-
-    @if type-of($mobile) == 'list' {
-        $mobile-font: nth($mobile, 1);
-        $mobile-bp: nth($mobile, 2);
-    }
-    @else if $mobile {
-        $mobile-font: $mobile;
-    }
+    $mobile-font: nth($mobile, 1);
+    $mobile-bp: nth($mobile, 2);
 
     $mobile-font: unitless-px($mobile-font);
     $mobile-bp: unitless-px($mobile-bp) / 100;
@@ -124,86 +104,96 @@ $slope-calc-data: () !default;
     $y-intercept: $mobile-font - ($mobile-bp * $slope);
 
     $calc: calc(#{$slope*1vw} + #{($y-intercept/16)*1rem});
-    $clip: rem($desktop-font);
 
     @if $desktop-font == $mobile-font {
         $calc: rem($desktop-font);
-        $clip: false;
     }
 
     @return (
         pieces: #{$slope*1vw} #{($y-intercept/16)*1rem},
         calc: $calc,
-        breakpoint: px-to-em($desktop-bp*100px),
-        clip: $clip
+        breakpoint: px-to-em($mobile-bp*100px)
     );
 }
 
-@function slope-calc($desktop, $mobile: false) {
-    @return map-get(slope-calc-internal($desktop, $mobile), calc);
+@function slope-calc($mobile, $desktop) {
+    @return map-get(slope-calc-internal($mobile, $desktop), calc);
 }
 
-@function slope-calc-transform($prop, $desktop, $mobile: false) {
-    $pieces: map-get(slope-calc-internal($desktop, $mobile), pieces);
+@function slope-calc-transform($prop, $mobile, $desktop) {
+    $pieces: map-get(slope-calc-internal($mobile, $desktop), pieces);
     @return #{$prop + '(' + nth($pieces, 1) + ')'} #{$prop + '(' + nth($pieces, 2) + ')'};
 }
 
-@mixin slope-calc($prop, $desktop, $mobile: false, $clip: true, $important: false) {
-
-    @if type-of($prop) == 'list' {
-        @each $p in $prop {
-            @include slope-calc($p, $desktop, $mobile, $clip, $important);
+@function slope-calc-args($slopes) {
+    $args: nth($slopes, length($slopes));
+    @if type-of($args) == 'string' or type-of($args) == 'list' and type-of(nth($args, 1)) == 'string' {
+        $slopes: remove($slopes, $args);
+        @if type-of($args) == 'string' {
+            $args: append((), $args);
         }
     }
     @else {
+        $args: ();
+    }
 
-        $results: slope-calc-internal($desktop, $mobile);
+    @return (
+        args: $args,
+        slopes: $slopes
+    );
+}
 
-        // uncomment the following for an IE8 fallback value
-        //$desktop-font: nth($desktop, 1);
-        //$desktop-font: unitless-px($desktop-font);
-        //#{$prop}: $desktop-font*1px;
-        // end IE8 fallback
+@mixin slope-calc($prop, $slopes...) {
 
-        #{$prop}: map-get($results, calc) if($important, !important, null);
+    @if type-of($prop) == 'list' {
+        @each $p in $prop {
+            @include slope-calc($p, $slopes...);
+        }
+    }
+    @else {
+        $getArgs: slope-calc-args($slopes);
+        $args: map-get($getArgs, args);
+        $slopes: map-get($getArgs, slopes);
 
-        @if $clip and map-get($results, clip) {
-            $desktop-value: map-get($results, clip) if($important, !important, null);
-            $desktop-bp: map-get($results, breakpoint);
+        $smallest: nth($slopes, 1);
 
-            $selectors: ();
-            @if map-has-key($slope-calc-data, $desktop-bp) {
-                $selectors: map-get($slope-calc-data, $desktop-bp);
+        @each $slope in $slopes {
+            @if unitless-px(nth($slope, 2)) < unitless-px(nth($smallest, 2)) {
+                $smallest: $slope;
             }
+        }
 
-            $selector: #{&};
-            $props: ();
-            @if map-has-key($selectors, $selector) {
-                $props: map-get($selectors, $selector);
+        $slopes: remove($slopes, $smallest);
+        $secondSmallest: nth($slopes, 1);
+
+        @each $slope in $slopes {
+            @if unitless-px(nth($slope, 2)) < unitless-px(nth($secondSmallest, 2)) {
+                $secondSmallest: $slope;
             }
+        }
 
-            $props: map-merge($props, ($prop: $desktop-value));
-            $selectors: map-merge($selectors, ($selector: $props));
-            $slope-calc-data: map-merge($slope-calc-data, ($desktop-bp: $selectors)) !global;
+        $results: slope-calc-internal($smallest, $secondSmallest);
+        $value: map-get($results, calc) if(index($args, important) != null, !important, null);
+
+        @if index($args, media-query) == null {
+            #{$prop}: $value;
+        }
+        @else {
+            @media only screen and (min-width: #{map-get($results, breakpoint)}) {
+                #{$prop}: $value;
+            }
+        }
+
+        @if (index($args, media-query) == null) {
+            $args: append($args, media-query);
+        }
+        @if length($slopes) > 1 {
+            $slopes: append($slopes, $args);
+            @include slope-calc($prop, $slopes...);
         }
     }
 }
 
-@mixin font-size($desktop, $mobile: false, $clip: true, $important: false) {
-    @include slope-calc(font-size, $desktop, $mobile, $clip: true, $important: $important);
-}
-
-// add `@include slope-calc-clip-media-queries()` to the bottom of your stylesheet.
-@mixin slope-calc-clip-media-queries() {
-    @each $breakpoint, $selectors in $slope-calc-data {
-        @media only screen and (min-width: #{$breakpoint}) {
-            @each $selector, $props in $selectors {
-                #{$selector} {
-                    @each $prop, $value in $props {
-                        #{$prop}: $value;
-                    }
-                }
-            }
-        }
-    }
+@mixin font-size($slopes...) {
+    @include slope-calc(font-size, $slopes...);
 }
