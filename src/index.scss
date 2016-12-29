@@ -23,9 +23,14 @@
 //
 // Flags:
 //
-// Flags are an optional argument passed in at the end of the slope-calc include. Currently, the only flag is
-// "important" if you pass in "important" (with or without quotes) as the last argument of slope-calc, it will
-// apply the css "!important" flag to the property.
+// Flags are an optional argument passed in at the end of the slope-calc include.
+// In scss, strings work with or without quotes.
+//
+// - important
+//   apply the css "!important" flag to the property (or properties) at all breakpoints.
+//
+// - clip
+//   add a media query at the largest breakpoint that sets the property to a fixed value
 //
 //
 
@@ -75,44 +80,38 @@
     @return unitless-px($number)/$base * 1rem;
 }
 
-$slope-calc-data: () !default;
+@function slope-calc-internal($from, $to) {
+    $to-size: unitless-px(nth($to, 1));
+    $to-breakpoint: unitless-px(nth($to, 2)) / 100;
 
-@function slope-calc-internal($mobile, $desktop) {
-    $desktop-font: nth($desktop, 1);
-    $desktop-bp: nth($desktop, 2);
+    $from-size: unitless-px(nth($from, 1));
+    $from-breakpoint: unitless-px(nth($from, 2)) / 100;
 
-    $desktop-font: unitless-px($desktop-font);
-    $desktop-bp: unitless-px($desktop-bp) / 100;
+    @if($from-breakpoint > $to-breakpoint) {
+        $tmp: $to-breakpoint;
+        $to-breakpoint: $from-breakpoint;
+        $from-breakpoint: $tmp;
 
-    $mobile-font: nth($mobile, 1);
-    $mobile-bp: nth($mobile, 2);
-
-    $mobile-font: unitless-px($mobile-font);
-    $mobile-bp: unitless-px($mobile-bp) / 100;
-
-    @if($mobile-bp > $desktop-bp) {
-        $tmp: $desktop-bp;
-        $desktop-bp: $mobile-bp;
-        $mobile-bp: $tmp;
-
-        $tmp: $desktop-font;
-        $desktop-font: $mobile-font;
-        $mobile-font: $tmp;
+        $tmp: $to-size;
+        $to-size: $from-size;
+        $from-size: $tmp;
     }
 
-    $slope: ($desktop-font - $mobile-font) / ($desktop-bp - $mobile-bp);
-    $y-intercept: $mobile-font - ($mobile-bp * $slope);
+    $pieces: rem($from-size);
+    $calc: $pieces;
 
-    $calc: calc(#{$slope*1vw} + #{($y-intercept/16)*1rem});
+    @if $from-size != $to-size {
+        $slope: ($to-size - $from-size) / ($to-breakpoint - $from-breakpoint);
+        $y-intercept: $from-size - ($from-breakpoint * $slope);
 
-    @if $desktop-font == $mobile-font {
-        $calc: rem($desktop-font);
+        $pieces: #{$slope*1vw} #{($y-intercept/16)*1rem};
+        $calc: calc(#{nth($pieces, 1)} + #{nth($pieces, 2)});
     }
 
     @return (
-        pieces: #{$slope*1vw} #{($y-intercept/16)*1rem},
+        pieces: $pieces,
         calc: $calc,
-        breakpoint: px-to-em($mobile-bp*100px)
+        breakpoint: px-to-em($from-breakpoint*100px)
     );
 }
 
@@ -120,9 +119,12 @@ $slope-calc-data: () !default;
     @return map-get(slope-calc-internal($mobile, $desktop), calc);
 }
 
-@function slope-calc-transform($prop, $mobile, $desktop) {
-    $pieces: map-get(slope-calc-internal($mobile, $desktop), pieces);
-    @return #{$prop + '(' + nth($pieces, 1) + ')'} #{$prop + '(' + nth($pieces, 2) + ')'};
+@function slope-calc-transform($prop, $from, $to) {
+    $pieces: map-get(slope-calc-internal($from, $to), pieces);
+    @if type-of($pieces) == 'list' {
+        @return #{$prop + '(' + nth($pieces, 1) + ')'} #{$prop + '(' + nth($pieces, 2) + ')'};
+    }
+    @return #{$prop + '(' + $pieces + ')'};
 }
 
 @function slope-calc-args($slopes) {
@@ -175,6 +177,10 @@ $slope-calc-data: () !default;
         $results: slope-calc-internal($smallest, $secondSmallest);
         $value: map-get($results, calc) if(index($args, important) != null, !important, null);
 
+        @if (nth($secondSmallest, 2) == (nth($smallest, 2) + 1)) {
+            $value: rem(unitless-px(nth($smallest, 1)));
+        }
+
         @if index($args, media-query) == null {
             #{$prop}: $value;
         }
@@ -189,6 +195,12 @@ $slope-calc-data: () !default;
         }
         @if length($slopes) > 1 {
             $slopes: append($slopes, $args);
+            @include slope-calc($prop, $slopes...);
+        }
+        @elseif (index($args, clip) != null) {
+            $args: remove($args, clip);
+            $slope: nth($slopes, 1);
+            $slopes: $slope, nth($slope, 1) nth($slope, 2) + 1, $args;
             @include slope-calc($prop, $slopes...);
         }
     }
