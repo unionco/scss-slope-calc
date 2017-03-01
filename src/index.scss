@@ -119,7 +119,7 @@
     @return map-get(slope-calc-internal($mobile, $desktop), calc);
 }
 
-@function slope-calc-transform($prop, $from, $to) {
+@function slope-calc-transform($prop, $from, $to, $args...) {
     $pieces: map-get(slope-calc-internal($from, $to), pieces);
     @if type-of($pieces) == 'list' {
         @return #{$prop + '(' + nth($pieces, 1) + ')'} #{$prop + '(' + nth($pieces, 2) + ')'};
