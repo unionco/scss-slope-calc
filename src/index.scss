@@ -197,7 +197,7 @@
             $slopes: append($slopes, $args);
             @include slope-calc($prop, $slopes...);
         }
-        @elseif (index($args, clip) != null) {
+        @else if (index($args, clip) != null) {
             $args: remove($args, clip);
             $slope: nth($slopes, 1);
             $slopes: $slope, nth($slope, 1) nth($slope, 2) + 1, $args;
