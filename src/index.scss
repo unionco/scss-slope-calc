@@ -34,6 +34,8 @@
 //
 //
 
+@use "sass:math";
+
 @function remove($list, $value, $recursive: false) {
     $result: ();
 
@@ -52,13 +54,13 @@
 
 @function strip-unit($number) {
     @if type-of($number) == 'number' and not unitless($number) {
-        @return $number / ($number * 0 + 1);
+        @return math.div($number, $number * 0 + 1);
     }
     @return $number;
 }
 
 @function px-to-em($number, $base:16) {
-    @return (strip-unit($number)/$base) * 1em;
+    @return math.div(strip-unit($number), $base) * 1em;
 }
 
 @function unitless-px($number, $base:16) {
@@ -77,15 +79,15 @@
 }
 
 @function rem($number, $base:16) {
-    @return unitless-px($number)/$base * 1rem;
+    @return math.div(unitless-px($number), $base) * 1rem;
 }
 
 @function slope-calc-internal($from, $to) {
     $to-size: unitless-px(nth($to, 1));
-    $to-breakpoint: unitless-px(nth($to, 2)) / 100;
+    $to-breakpoint: math.div(unitless-px(nth($to, 2)), 100);
 
     $from-size: unitless-px(nth($from, 1));
-    $from-breakpoint: unitless-px(nth($from, 2)) / 100;
+    $from-breakpoint: math.div(unitless-px(nth($from, 2)), 100);
 
     @if($from-breakpoint > $to-breakpoint) {
         $tmp: $to-breakpoint;
@@ -101,10 +103,10 @@
     $calc: $pieces;
 
     @if $from-size != $to-size {
-        $slope: ($to-size - $from-size) / ($to-breakpoint - $from-breakpoint);
+        $slope: math.div($to-size - $from-size, $to-breakpoint - $from-breakpoint);
         $y-intercept: $from-size - ($from-breakpoint * $slope);
 
-        $pieces: #{$slope*1vw} #{($y-intercept/16)*1rem};
+        $pieces: #{$slope*1vw} #{math.div($y-intercept, 16)*1rem};
         $calc: calc(#{nth($pieces, 1)} + #{nth($pieces, 2)});
     }
 
