@@ -1,6 +1,6 @@
 {
   "name": "@union/scss-slope-calc",
-  "version": "2.1.2",
+  "version": "2.1.4",
   "main": "src/index.scss",
   "author": "UNION <dev@union.co> (http://union.co)",
   "repository": {
