@@ -1,6 +1,21 @@
 Slope Calc
 ==========
 
+## Notes|Caveats
+
+Slope-calc import must come at the end of your `@use` rules (if applicable), but before all other non-use rules so that we can properly use "sass:math" and prevent the following error
+`SassError: @use rules must be written before any other rules.`
+
+``` scss
+// app.scss
+
+@charset "UTF-8";
+@use X;
+@use Y;
+@import "@union/scss-slope-calc";
+// (^ This places `@use "sass:math";` before non-use rules, followed by slope-calc
+```
+
 ## Example
 
 Scss Input:

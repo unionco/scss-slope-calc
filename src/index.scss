@@ -2,6 +2,19 @@
 //    Slope Calc Mixin    //
 ////////////////////////////
 //
+// Slope-calc import must come at the end of your `@use` rules (if applicable), but before all other non-use rules so that we can properly use "sass:math" and prevent the following error
+// `SassError: @use rules must be written before any other rules.`
+//
+// /app.scss
+// ```
+// @charset "UTF-8";
+// @use X;
+// @use Y;
+// @import "@union/scss-slope-calc";
+// (^ This places `@use "sass:math";` at the top of your stylesheet followed by slope-calc
+// ```
+//
+//
 // Usage:
 //
 // .my-widget {
@@ -33,6 +46,7 @@
 //   add a media query at the largest breakpoint that sets the property to a fixed value
 //
 //
+@use "sass:math";
 
 @function remove($list, $value, $recursive: false) {
     $result: ();
@@ -52,13 +66,13 @@
 
 @function strip-unit($number) {
     @if type-of($number) == 'number' and not unitless($number) {
-        @return calc($number / $number * 0 + 1);
+        @return math.div($number, $number * 0 + 1);
     }
     @return $number;
 }
 
 @function px-to-em($number, $base:16) {
-    @return calc(strip-unit($number) / $base) * 1em;
+    @return math.div(strip-unit($number), $base) * 1em;
 }
 
 @function unitless-px($number, $base:16) {
@@ -77,15 +91,15 @@
 }
 
 @function rem($number, $base:16) {
-    @return calc(unitless-px($number) / $base) * 1rem;
+    @return math.div(unitless-px($number), $base) * 1rem;
 }
 
 @function slope-calc-internal($from, $to) {
     $to-size: unitless-px(nth($to, 1));
-    $to-breakpoint: calc(unitless-px(nth($to, 2)) / 100);
+    $to-breakpoint: math.div(unitless-px(nth($to, 2)), 100);
 
     $from-size: unitless-px(nth($from, 1));
-    $from-breakpoint: calc(unitless-px(nth($from, 2)) / 100);
+    $from-breakpoint: math.div(unitless-px(nth($from, 2)), 100);
 
     @if($from-breakpoint > $to-breakpoint) {
         $tmp: $to-breakpoint;
@@ -101,10 +115,10 @@
     $calc: $pieces;
 
     @if $from-size != $to-size {
-        $slope: calc($to-size - $from-size / $to-breakpoint - $from-breakpoint);
+        $slope: math.div($to-size - $from-size, $to-breakpoint - $from-breakpoint);
         $y-intercept: $from-size - ($from-breakpoint * $slope);
 
-        $pieces: #{$slope*1vw} #{calc($y-intercept / 16)*1rem};
+        $pieces: #{$slope*1vw} #{math.div($y-intercept, 16)*1rem};
         $calc: calc(#{nth($pieces, 1)} + #{nth($pieces, 2)});
     }
 
